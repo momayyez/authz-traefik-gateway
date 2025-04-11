@@ -1,4 +1,4 @@
-package authz_traefik_gateway
+package authztraefikgateway
 
 import (
 	"context"
@@ -8,15 +8,15 @@ import (
 	"strings"
 )
 
-// GatewayConfig defines config fields used by the middleware
-type GatewayConfig struct {
-	TokenEndpoint string `yaml:"token_endpoint"`
-	ClientID      string `yaml:"client_id"`
+// Config defines config fields used by the middleware
+type Config struct {
+	TokenEndpoint string `json:"token_endpoint,omitempty" yaml:"token_endpoint"`
+	ClientID      string `json:"client_id,omitempty" yaml:"client_id"`
 }
 
-// DefaultConfig returns default config
-func DefaultConfig() *GatewayConfig {
-	return &GatewayConfig{
+// CreateConfig returns default config
+func CreateConfig() *Config {
+	return &Config{
 		TokenEndpoint: "",
 		ClientID:      "",
 	}
@@ -65,11 +65,11 @@ func (ph *PermissionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // New creates the middleware handler
-func New(ctx context.Context, next http.Handler, cfg *GatewayConfig, name string) (http.Handler, error) {
+func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
 	return &PermissionHandler{
 		next:       next,
 		middleware: name,
-		endpoint:   cfg.TokenEndpoint,
-		clientID:   cfg.ClientID,
+		endpoint:   config.TokenEndpoint,
+		clientID:   config.ClientID,
 	}, nil
 }
