@@ -1,4 +1,4 @@
-package authz_traefik_gateway
+package authztraefikgateway
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 const sampleToken = "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiw..."
 
 func TestPermissionHandler_OK(t *testing.T) {
-	cfg := &GatewayConfig{
+	cfg := &Config{
 		TokenEndpoint: "http://localhost:8080/realms/demo/protocol/openid-connect/token",
 		ClientID:      "traefik-gateway-client",
 	}
