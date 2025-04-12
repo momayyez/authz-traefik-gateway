@@ -11,8 +11,8 @@ import (
 
 // Config holds the plugin configuration
 type Config struct {
-	KeycloakURL      string `json:"keycloak_url"`      // ✅ fixed from yaml to json
-	KeycloakClientId string `json:"keycloak_client_id"` // ✅ fixed from yaml to json
+	KeycloakURL      string `yaml:"keycloak_url"`     
+	KeycloakClientId string `yaml:"keycloak_client_id"` 
 }
 
 // CreateConfig creates the default plugin configuration
