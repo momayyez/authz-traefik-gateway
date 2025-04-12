@@ -1,4 +1,4 @@
-package authz_traefik_gateway
+package authztraefikgateway
 
 import (
 	"context"
