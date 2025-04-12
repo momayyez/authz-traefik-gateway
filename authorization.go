@@ -43,7 +43,7 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return // Added return statement to prevent further execution
 	}
-	kcReq.Header.Set("Authorization", "Bearer "+req.Header.Get("X-Auth-Request-Access-Token"))
+	kcReq.Header.Set("Authorization", req.Header.Get("Authorization"))
 	kcReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
