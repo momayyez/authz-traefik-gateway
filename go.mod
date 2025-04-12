@@ -1,3 +1,3 @@
 module github.com/momayyez/authz-traefik-gateway
 
-go 1.18
+go 1.15
