@@ -8,68 +8,65 @@ import (
 	"strings"
 )
 
-// Config defines config fields used by the middleware
+// Config holds the plugin configuration
 type Config struct {
-	TokenEndpoint string `json:"token_endpoint,omitempty" yaml:"token_endpoint"`
-	ClientID      string `json:"client_id,omitempty" yaml:"client_id"`
+	KeycloakURL      string `yaml:"keycloak_url"`
+	KeycloakClientId string `yaml:"keycloak_client_id"`
 }
 
-// CreateConfig returns default config
+// CreateConfig creates the default plugin configuration
 func CreateConfig() *Config {
 	return &Config{
-		TokenEndpoint: "",
-		ClientID:      "",
+		KeycloakURL:      "",
+		KeycloakClientId: "",
 	}
 }
 
-// PermissionHandler represents the middleware structure
-type PermissionHandler struct {
-	next       http.Handler
-	clientID   string
-	endpoint   string
-	middleware string
+type AuthMiddleware struct {
+	next             http.Handler
+	keycloakClientId string
+	keycloakUrl      string
+	name             string
 }
 
-// ServeHTTP checks user permissions using UMA ticket flow
-func (ph *PermissionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	resource := r.URL.Path
-	scope := r.Method
-	perm := resource + "#" + scope
+func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	resourceUrl := req.URL.Path
+	method := req.Method
+	permission := resourceUrl + "#" + method
 
-	data := url.Values{}
-	data.Set("permission", perm)
-	data.Set("grant_type", "urn:ietf:params:oauth:grant-type:uma-ticket")
-	data.Set("audience", ph.clientID)
-
-	authReq, err := http.NewRequest("POST", ph.endpoint, strings.NewReader(data.Encode()))
+	formData := url.Values{}
+	formData.Set("permission", permission)
+	formData.Set("grant_type", "urn:ietf:params:oauth:grant-type:uma-ticket")
+	formData.Set("audience", am.keycloakClientId)
+	kcReq, err := http.NewRequest("POST", am.keycloakUrl, strings.NewReader(formData.Encode()))
 	if err != nil {
-		http.Error(w, "auth request creation failed", http.StatusUnauthorized)
-		return
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return // Added return statement to prevent further execution
 	}
-	authReq.Header.Set("Authorization", "Bearer "+r.Header.Get("X-Auth-Request-Access-Token"))
-	authReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	kcReq.Header.Set("Authorization", "Bearer "+req.Header.Get("X-Auth-Request-Access-Token"))
+	kcReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	resp, err := (&http.Client{}).Do(authReq)
+	client := &http.Client{}
+	kcResp, err := client.Do(kcReq)
 	if err != nil {
-		http.Error(w, "keycloak unreachable", http.StatusUnauthorized)
-		return
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return // Added return statement to prevent further execution
 	}
-	defer resp.Body.Close()
+	defer kcResp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
-		ph.next.ServeHTTP(w, r)
+	if kcResp.StatusCode == http.StatusOK {
+		am.next.ServeHTTP(w, req)
 	} else {
-		http.Error(w, "access denied", http.StatusUnauthorized)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	}
 }
 
-// New creates the middleware handler
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
-	return &PermissionHandler{
-		next:       next,
-		middleware: name,
-		endpoint:   config.TokenEndpoint,
-		clientID:   config.ClientID,
+	return &AuthMiddleware{
+		next:             next,
+		name:             name,
+		keycloakUrl:      config.KeycloakURL,
+		keycloakClientId: config.KeycloakClientId,
 	}, nil
 }
