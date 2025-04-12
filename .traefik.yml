@@ -4,8 +4,8 @@ iconPath: .assets/icon.png
 
 import: github.com/momayyez/authz-traefik-gateway
 
-summary: Authorization middleware for validating Keycloak permissions using UMA 2.0
+summary: 'Authorization middleware for validating Keycloak permissions'
 
 testData:
-  TokenEndpoint: "http://keycloak:8080/realms/demo/protocol/openid-connect/token"
-  ClientID: "traefik-gateway-client"
+  keycloak_url: http://keycloak:8080/auth/realms/mingyang/protocol/openid-connect/token
+  keycloak_client_id: traefik-gateway-client
