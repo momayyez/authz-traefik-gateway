@@ -21,6 +21,6 @@ http:
   middlewares:
     keycloak-authz:
       plugin:
-        authz-traefik-gateway:
+        authztraefikgateway:
           token_endpoint: "https://keycloak.local/realms/demo/protocol/openid-connect/token"
           client_id: "traefik-gateway-client"
