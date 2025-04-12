@@ -21,7 +21,7 @@ func TestAuthorization(t *testing.T) {
 
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://keycloak:8080/whoami", nil)
-	req.Header.Set("X-Auth-Request-Access-Token", token)
+	req.Header.Set("Authorization", "Bearer "+token)
 	handler.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusOK {
