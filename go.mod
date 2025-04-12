@@ -1,3 +1,3 @@
-module github.com/momayyez/authz-traefik-gateway
+module github.com/momayyez/authztraefikgateway
 
 go 1.15
