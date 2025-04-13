@@ -11,15 +11,15 @@ import (
 
 // Config holds the plugin configuration
 type Config struct {
-    KeycloakURL      string `json:"keycloak_url" yaml:"keycloak_url"`
-    KeycloakClientId string `json:"keycloak_client_id" yaml:"keycloak_client_id"`
+    KeycloakURL      string `yaml:"keycloak_url"`
+    KeycloakClientId string `yaml:"keycloak_client_id"`
 }
 
 // CreateConfig creates the default plugin configuration
 func CreateConfig() *Config {
 	return &Config{
-		KeycloakURL:      "",
-		KeycloakClientId: "",
+		KeycloakURL:      "key.local",
+		KeycloakClientId: "keyclient",
 	}
 }
 
