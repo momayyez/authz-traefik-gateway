@@ -18,8 +18,8 @@ type Config struct {
 // CreateConfig creates the default plugin configuration
 func CreateConfig() *Config {
 	return &Config{
-		KeycloakURL:      "key.local",
-		KeycloakClientId: "keyclient",
+		KeycloakURL:      "https://auth.sepahtan.net:8443/realms/mzusertest/protocol/openid-connect/token",
+		KeycloakClientId: "whoami-client",
 	}
 }
 
