@@ -2,7 +2,6 @@ package authztraefikgateway
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -68,6 +67,7 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	kcReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	fmt.Println("🔄 [REQUEST] Sending request to Keycloak:", am.keycloakUrl)
+	client := &http.Client{}
 	kcResp, err := client.Do(kcReq)
 	if err != nil {
 		fmt.Println("❌ [HTTP] Error performing Keycloak request:", err)
