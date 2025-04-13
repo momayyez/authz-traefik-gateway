@@ -9,18 +9,15 @@ import (
 	"strings"
 )
 
-// Config holds the plugin configuration
+// Config holds the plugin configuration (camelCase names to match YAML keys)
 type Config struct {
-    KeycloakURL      string `json:"keycloak_url,omitempty"`
-    KeycloakClientId string `json:"keycloak_client_id,omitempty"`
+	KeycloakURL      string `json:"keycloakURL,omitempty"`
+	KeycloakClientId string `json:"keycloakClientId,omitempty"`
 }
 
-// CreateConfig creates the default plugin configuration
+// CreateConfig creates an empty config; actual values come from YAML
 func CreateConfig() *Config {
-	return &Config{
-		KeycloakURL:      "https://auth.sepahtan.net:8443/realms/mzusertest/protocol/openid-connect/token",
-		KeycloakClientId: "whoami-client",
-	}
+	return &Config{}
 }
 
 type AuthMiddleware struct {
@@ -30,6 +27,7 @@ type AuthMiddleware struct {
 	name             string
 }
 
+// ServeHTTP handles the incoming request and checks permission via Keycloak
 func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	fmt.Println("🔎 [AUTH] ServeHTTP Called")
 
@@ -91,6 +89,7 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+// New is called by Traefik to create the middleware instance
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
 	fmt.Println("🔧 [INIT] New Middleware Initialization")
 	fmt.Printf("🔧 [INIT] Config pointer: %p\n", config)
@@ -100,9 +99,6 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		fmt.Println("❌ [CONFIG] Received nil config! Middleware cannot proceed.")
 		return nil, fmt.Errorf("nil config provided")
 	}
-
-	fmt.Printf("🔧 [CONFIG] Received config.KeycloakURL: [%s]\n", config.KeycloakURL)
-	fmt.Printf("🔧 [CONFIG] Received config.KeycloakClientId: [%s]\n", config.KeycloakClientId)
 
 	if strings.TrimSpace(config.KeycloakURL) == "" {
 		fmt.Println("⚠️  [CONFIG] KeycloakURL is empty! Make sure you define it in the dynamic middleware config.")
