@@ -11,8 +11,8 @@ import (
 
 // Config holds the plugin configuration
 type Config struct {
-	KeycloakURL      string `yaml:"keycloak_url"`
-	KeycloakClientId string `yaml:"keycloak_client_id"`
+    KeycloakURL      string `json:"keycloak_url" yaml:"keycloak_url"`
+    KeycloakClientId string `json:"keycloak_client_id" yaml:"keycloak_client_id"`
 }
 
 // CreateConfig creates the default plugin configuration
@@ -94,6 +94,7 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
 	fmt.Println("🔧 [INIT] New Middleware Initialization")
 	fmt.Printf("🔧 [INIT] Config pointer: %p\n", config)
+	fmt.Printf("🔧 [CONFIG] Raw config: %+v\n", config)
 
 	if config == nil {
 		fmt.Println("❌ [CONFIG] Received nil config! Middleware cannot proceed.")
