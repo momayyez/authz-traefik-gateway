@@ -2,7 +2,7 @@ package authztraefikgateway
 
 import (
 	"context"
-	"crypto/tls" // Added for TLS config
+	"crypto/tls" // TLS config for development
 	"fmt"
 	"io"
 	"net/http"
@@ -21,6 +21,7 @@ func CreateConfig() *Config {
 	return &Config{}
 }
 
+// AuthMiddleware holds the plugin state
 type AuthMiddleware struct {
 	next             http.Handler
 	keycloakClientId string
@@ -40,10 +41,18 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	fmt.Println("🔎 [AUTH] Authorization Header:", authorizationHeader)
 
-	resourceUrl := req.URL.Path
-	method := req.Method
-	permission := resourceUrl + "#" + method
-	fmt.Println("🔎 [AUTH] Permission to check:", permission)
+	// 🧠 Extract the path and derive `resource` and `scope`
+	pathParts := strings.Split(req.URL.Path, "/")
+	if len(pathParts) < 4 {
+		fmt.Println("❌ [AUTH] Path must have format: /.../<resource>/<scope>/...")
+		http.Error(w, "Invalid path format. Expected format: /<prefix>/<resource>/<scope>", http.StatusBadRequest)
+		return
+	}
+
+	resource := pathParts[len(pathParts)-2]
+	scope := pathParts[len(pathParts)-1]
+	permission := "/" + resource + "#" + scope
+	fmt.Println("🔎 [AUTH] Derived permission:", permission)
 
 	formData := url.Values{}
 	formData.Set("permission", permission)
@@ -67,12 +76,11 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	fmt.Println("🔄 [REQUEST] Sending request to Keycloak:", am.keycloakUrl)
 
-	// 🔐 WARNING: Skipping TLS verification — only for development/testing!
-	// ❗ REMOVE THIS SECTION FOR PRODUCTION!
+	// ⚠️ TLS config: skip verify only for development!
 	client := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true, // ⛔️ Accept any certificate (dangerous in prod!)
+				InsecureSkipVerify: true,
 			},
 		},
 	}
