@@ -42,18 +42,22 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	fmt.Println("🔎 [AUTH] Authorization Header:", authorizationHeader)
 
 	// 🧠 Extract the path and derive `resource` and `scope`
+	// Assumes path like: /prefix1/prefix2/prefix3/<resource>/<scope>/...
 	pathParts := strings.Split(req.URL.Path, "/")
-	if len(pathParts) < 4 {
-		fmt.Println("❌ [AUTH] Path must have format: /.../<resource>/<scope>/...")
-		http.Error(w, "Invalid path format. Expected format: /<prefix>/<resource>/<scope>", http.StatusBadRequest)
+	if len(pathParts) < 6 {
+		// Needs at least 6 parts: "", prefix1, prefix2, prefix3, resource, scope
+		fmt.Println("❌ [AUTH] Path too short. Must be at least: /.../<resource>/<scope>/...")
+		http.Error(w, "Invalid path format. Expected format: /prefix/.../<resource>/<scope>", http.StatusBadRequest)
 		return
 	}
 
-	resource := pathParts[len(pathParts)-2]
-	scope := pathParts[len(pathParts)-1]
+	// Extract `resource` and `scope` as the 4th and 5th segments (index 4 and 5)
+	resource := pathParts[4]
+	scope := pathParts[5]
 	permission := "/" + resource + "#" + scope
 	fmt.Println("🔎 [AUTH] Derived permission:", permission)
 
+	// Prepare request payload for Keycloak
 	formData := url.Values{}
 	formData.Set("permission", permission)
 	formData.Set("grant_type", "urn:ietf:params:oauth:grant-type:uma-ticket")
@@ -65,6 +69,7 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// 🔐 Build the request to Keycloak
 	kcReq, err := http.NewRequest("POST", am.keycloakUrl, strings.NewReader(formData.Encode()))
 	if err != nil {
 		fmt.Println("❌ [HTTP] Error creating Keycloak request:", err)
@@ -76,7 +81,7 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	fmt.Println("🔄 [REQUEST] Sending request to Keycloak:", am.keycloakUrl)
 
-	// ⚠️ TLS config: skip verify only for development!
+	// ⚠️ TLS config: skip verify only for development/testing!
 	client := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
@@ -85,6 +90,7 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		},
 	}
 
+	// 🔍 Send request to Keycloak
 	kcResp, err := client.Do(kcReq)
 	if err != nil {
 		fmt.Println("❌ [HTTP] Error performing Keycloak request:", err)
@@ -93,6 +99,7 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	defer kcResp.Body.Close()
 
+	// 📦 Read and log Keycloak's response
 	bodyBytes, _ := io.ReadAll(kcResp.Body)
 	bodyString := string(bodyBytes)
 
