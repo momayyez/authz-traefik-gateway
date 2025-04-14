@@ -2,7 +2,7 @@ displayName: Traefik AuthZ Gateway
 type: middleware
 iconPath: .assets/icon.png
 
-import: github.com/momayyez/authz-traefik-gateway
+import: github.com/momayyez/authztraefikgateway
 
 summary: Authorization middleware for validating Keycloak permissions using UMA 2.0
 
