@@ -14,6 +14,8 @@ import (
 type Config struct {
 	KeycloakURL      string `json:"keycloakURL,omitempty"`
 	KeycloakClientId string `json:"keycloakClientId,omitempty"`
+	ResourceIndex    int    `json:"resourceIndex,omitempty"` // New: Optional index for resource
+	ScopeIndex       int    `json:"scopeIndex,omitempty"`    // New: Optional index for scope
 }
 
 // CreateConfig creates an empty config; actual values come from YAML
@@ -27,6 +29,8 @@ type AuthMiddleware struct {
 	keycloakClientId string
 	keycloakUrl      string
 	name             string
+	resourceIndex    int
+	scopeIndex       int
 }
 
 // ServeHTTP handles the incoming request and checks permission via Keycloak
@@ -42,18 +46,15 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	fmt.Println("🔎 [AUTH] Authorization Header:", authorizationHeader)
 
 	// 🧠 Extract the path and derive `resource` and `scope`
-	// Assumes path like: /prefix1/prefix2/prefix3/<resource>/<scope>/...
 	pathParts := strings.Split(req.URL.Path, "/")
-	if len(pathParts) < 6 {
-		// Needs at least 6 parts: "", prefix1, prefix2, prefix3, resource, scope
-		fmt.Println("❌ [AUTH] Path too short. Must be at least: /.../<resource>/<scope>/...")
-		http.Error(w, "Invalid path format. Expected format: /prefix/.../<resource>/<scope>", http.StatusBadRequest)
+	if len(pathParts) <= am.scopeIndex {
+		fmt.Println("❌ [AUTH] Path too short. Must have at least", am.scopeIndex+1, "parts.")
+		http.Error(w, "Invalid path format. Too short.", http.StatusBadRequest)
 		return
 	}
 
-	// Extract `resource` and `scope` as the 4th and 5th segments (index 4 and 5)
-	resource := pathParts[4]
-	scope := pathParts[5]
+	resource := pathParts[am.resourceIndex]
+	scope := pathParts[am.scopeIndex]
 	permission := "/" + resource + "#" + scope
 	fmt.Println("🔎 [AUTH] Derived permission:", permission)
 
@@ -133,14 +134,26 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		fmt.Println("⚠️  [CONFIG] KeycloakClientId is empty! Make sure you define it in the dynamic middleware config.")
 	}
 
+	resourceIndex := config.ResourceIndex
+	scopeIndex := config.ScopeIndex
+	if resourceIndex <= 0 {
+		resourceIndex = 4
+	}
+	if scopeIndex <= 0 {
+		scopeIndex = 5
+	}
+
 	mw := &AuthMiddleware{
 		next:             next,
 		name:             name,
 		keycloakUrl:      config.KeycloakURL,
 		keycloakClientId: config.KeycloakClientId,
+		resourceIndex:    resourceIndex,
+		scopeIndex:       scopeIndex,
 	}
 
-	fmt.Printf("🔧 [INIT] Middleware initialized with keycloakUrl: [%s], keycloakClientId: [%s]\n", mw.keycloakUrl, mw.keycloakClientId)
+	fmt.Printf("🔧 [INIT] Middleware initialized with keycloakUrl: [%s], keycloakClientId: [%s], resourceIndex: %d, scopeIndex: %d\n",
+		mw.keycloakUrl, mw.keycloakClientId, mw.resourceIndex, mw.scopeIndex)
 
 	return mw, nil
 }
