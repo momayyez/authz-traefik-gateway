@@ -8,4 +8,13 @@ summary: Authorization middleware for validating Keycloak permissions using UMA 
 
 testData:
   keycloak_url: http://keycloak:8080/realms/demo/protocol/openid-connect/token
-  keycloak_client_id: traefik-gateway-client
+  keycloak_client_id: "traefik-gateway-client"
+  resourceIndex: 3
+  scopeIndex: 4
+  staticPermissions:
+  - prefix: "/health"
+    resource: "system"
+    scope: "read"
+  - prefix: "/public/docs"
+    resource: "docs"
+    scope: "view"
