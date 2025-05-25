@@ -1,8 +1,8 @@
-package authztraefikgateway
+package traefikauthz
 
 import (
 	"context"
-	"crypto/tls" // TLS config for development
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,27 +10,36 @@ import (
 	"strings"
 )
 
-// Config holds the plugin configuration (camelCase names to match YAML keys)
-type Config struct {
-	KeycloakURL      string `json:"keycloakURL,omitempty"`
-	KeycloakClientId string `json:"keycloakClientId,omitempty"`
-	ResourceIndex    int    `json:"resourceIndex,omitempty"` // New: Optional index for resource
-	ScopeIndex       int    `json:"scopeIndex,omitempty"`    // New: Optional index for scope
+// StaticPermission maps a path prefix to a specific resource-scope
+type StaticPermission struct {
+	Prefix   string `json:"prefix,omitempty"`   // e.g. "/custom/test"
+	Resource string `json:"resource,omitempty"` // e.g. "user"
+	Scope    string `json:"scope,omitempty"`    // e.g. "getall"
 }
 
-// CreateConfig creates an empty config; actual values come from YAML
+// Config holds the plugin configuration
+type Config struct {
+	KeycloakURL       string             `json:"keycloakURL,omitempty"`
+	KeycloakClientId  string             `json:"keycloakClientId,omitempty"`
+	ResourceIndex     int                `json:"resourceIndex,omitempty"`
+	ScopeIndex        int                `json:"scopeIndex,omitempty"`
+	StaticPermissions []StaticPermission `json:"staticPermissions,omitempty"` // New: static prefix -> resource#scope
+}
+
+// CreateConfig creates an empty config
 func CreateConfig() *Config {
 	return &Config{}
 }
 
 // AuthMiddleware holds the plugin state
 type AuthMiddleware struct {
-	next             http.Handler
-	keycloakClientId string
-	keycloakUrl      string
-	name             string
-	resourceIndex    int
-	scopeIndex       int
+	next              http.Handler
+	keycloakClientId  string
+	keycloakUrl       string
+	name              string
+	resourceIndex     int
+	scopeIndex        int
+	staticPermissions []StaticPermission
 }
 
 // ServeHTTP handles the incoming request and checks permission via Keycloak
@@ -45,20 +54,33 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	fmt.Println("🔎 [AUTH] Authorization Header:", authorizationHeader)
 
-	// 🧠 Extract the path and derive `resource` and `scope`
-	pathParts := strings.Split(req.URL.Path, "/")
-	if len(pathParts) <= am.scopeIndex {
-		fmt.Println("❌ [AUTH] Path too short. Must have at least", am.scopeIndex+1, "parts.")
-		http.Error(w, "Invalid path format. Too short.", http.StatusBadRequest)
-		return
+	var permission string
+
+	// 🔍 First check if path matches any static permission
+	for _, sp := range am.staticPermissions {
+		if strings.HasPrefix(req.URL.Path, sp.Prefix) {
+			permission = "/" + sp.Resource + "#" + sp.Scope
+			fmt.Println("🔁 [STATIC] Matched static prefix. Using static permission:", permission)
+			break
+		}
 	}
 
-	resource := pathParts[am.resourceIndex]
-	scope := pathParts[am.scopeIndex]
-	permission := "/" + resource + "#" + scope
-	fmt.Println("🔎 [AUTH] Derived permission:", permission)
+	// 🔁 If no static permission matched, use dynamic extraction
+	if permission == "" {
+		pathParts := strings.Split(req.URL.Path, "/")
+		if len(pathParts) <= am.scopeIndex {
+			fmt.Println("❌ [AUTH] Path too short. Must have at least", am.scopeIndex+1, "parts.")
+			http.Error(w, "Invalid path format. Too short.", http.StatusBadRequest)
+			return
+		}
 
-	// Prepare request payload for Keycloak
+		resource := pathParts[am.resourceIndex]
+		scope := pathParts[am.scopeIndex]
+		permission = "/" + resource + "#" + scope
+		fmt.Println("🔎 [AUTH] Derived permission:", permission)
+	}
+
+	// Prepare request payload
 	formData := url.Values{}
 	formData.Set("permission", permission)
 	formData.Set("grant_type", "urn:ietf:params:oauth:grant-type:uma-ticket")
@@ -70,7 +92,7 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// 🔐 Build the request to Keycloak
+	// Create request
 	kcReq, err := http.NewRequest("POST", am.keycloakUrl, strings.NewReader(formData.Encode()))
 	if err != nil {
 		fmt.Println("❌ [HTTP] Error creating Keycloak request:", err)
@@ -79,19 +101,14 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	kcReq.Header.Set("Authorization", authorizationHeader)
 	kcReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
 	fmt.Println("🔄 [REQUEST] Sending request to Keycloak:", am.keycloakUrl)
 
-	// ⚠️ TLS config: skip verify only for development/testing!
 	client := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
 
-	// 🔍 Send request to Keycloak
 	kcResp, err := client.Do(kcReq)
 	if err != nil {
 		fmt.Println("❌ [HTTP] Error performing Keycloak request:", err)
@@ -100,7 +117,6 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	defer kcResp.Body.Close()
 
-	// 📦 Read and log Keycloak's response
 	bodyBytes, _ := io.ReadAll(kcResp.Body)
 	bodyString := string(bodyBytes)
 
@@ -119,41 +135,39 @@ func (am *AuthMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // New is called by Traefik to create the middleware instance
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
 	fmt.Println("🔧 [INIT] New Middleware Initialization")
-	fmt.Printf("🔧 [INIT] Config pointer: %p\n", config)
 	fmt.Printf("🔧 [CONFIG] Raw config: %+v\n", config)
 
 	if config == nil {
-		fmt.Println("❌ [CONFIG] Received nil config! Middleware cannot proceed.")
 		return nil, fmt.Errorf("nil config provided")
 	}
-
 	if strings.TrimSpace(config.KeycloakURL) == "" {
-		fmt.Println("⚠️  [CONFIG] KeycloakURL is empty! Make sure you define it in the dynamic middleware config.")
+		fmt.Println("⚠️  [CONFIG] KeycloakURL is empty!")
 	}
 	if strings.TrimSpace(config.KeycloakClientId) == "" {
-		fmt.Println("⚠️  [CONFIG] KeycloakClientId is empty! Make sure you define it in the dynamic middleware config.")
+		fmt.Println("⚠️  [CONFIG] KeycloakClientId is empty!")
 	}
 
 	resourceIndex := config.ResourceIndex
 	scopeIndex := config.ScopeIndex
 	if resourceIndex <= 0 {
-		resourceIndex = 4
+		resourceIndex = 3
 	}
 	if scopeIndex <= 0 {
-		scopeIndex = 5
+		scopeIndex = 4
 	}
 
 	mw := &AuthMiddleware{
-		next:             next,
-		name:             name,
-		keycloakUrl:      config.KeycloakURL,
-		keycloakClientId: config.KeycloakClientId,
-		resourceIndex:    resourceIndex,
-		scopeIndex:       scopeIndex,
+		next:              next,
+		name:              name,
+		keycloakUrl:       config.KeycloakURL,
+		keycloakClientId:  config.KeycloakClientId,
+		resourceIndex:     resourceIndex,
+		scopeIndex:        scopeIndex,
+		staticPermissions: config.StaticPermissions,
 	}
 
-	fmt.Printf("🔧 [INIT] Middleware initialized with keycloakUrl: [%s], keycloakClientId: [%s], resourceIndex: %d, scopeIndex: %d\n",
-		mw.keycloakUrl, mw.keycloakClientId, mw.resourceIndex, mw.scopeIndex)
+	fmt.Printf("🔧 [INIT] Middleware initialized with keycloakUrl: [%s], clientId: [%s], rIdx: %d, sIdx: %d\n",
+		mw.keycloakUrl, mw.keycloakClientId, resourceIndex, scopeIndex)
 
 	return mw, nil
 }
